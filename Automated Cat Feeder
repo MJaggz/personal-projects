@@ -1,0 +1,120 @@
+#include <HX711_ADC.h>
+#if defined(ESP8266) || defined(ESP32) || defined(AVR)
+#include <EEPROM.h>
+#endif
+
+#include <Servo.h>
+Servo servo;
+
+#include <LiquidCrystal.h>
+const int rs = 12, en = 11, d4 = 8, d5 = 7, d6 = 6, d7 = 5;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+int contrast = 75;
+
+const int HX711_dout = 2;
+const int HX711_sck = 3;
+
+HX711_ADC LoadCell(HX711_dout, HX711_sck);
+
+const int calVal_eepromAdress = 0;
+unsigned long t = 0;
+
+int overweight = 25;
+int maxWeight = 6;
+int minWeight = 4;
+
+void loop() {
+    static boolean newDataReady = 0;
+    const int serialPrintInterval = 10000; // Increase value to slow down serial print activity
+
+    // Check for new data/start next conversion:
+    if (LoadCell.update()) newDataReady = true;
+
+    // Get smoothed value from the dataset:
+    if (newDataReady) {
+        if (millis() > t + serialPrintInterval) {
+            float val = LoadCell.getData();
+            float pounds = ((val / 1000) * 2.205);
+
+            Serial.print("Load cell output val: ");
+            Serial.println(pounds);
+
+            lcd.setCursor(0, 0);
+            lcd.print("Scale");
+            lcd.setCursor(0, 2);
+            lcd.print("Ready");
+            delay(500);
+            lcd.setCursor(0, 0);
+            lcd.print(" ");
+            lcd.print("Scale");
+            lcd.setCursor(0, 2);
+            lcd.print("Ready");
+            delay(500);
+
+            newDataReady = 0;
+            t = millis();
+        }
+
+        if (pounds < 0.05) {
+            servo.write(0);
+            return;
+        }
+
+        if ((pounds < minWeight) && (pounds > 0.05)) {
+            lcd.setCursor(12, 0);
+            lcd.print("Prev.");
+            lcd.setCursor(12, 2);
+            lcd.print(pounds);
+
+            lcd.setCursor(0, 0);
+            lcd.print(pounds);
+            lcd.print(" ");
+            lcd.setCursor(0, 2);
+            lcd.print("Pounds");
+
+            servo.write(20);
+            delay(1000);
+            servo.write(0);
+            delay(900);
+            return;
+        }
+
+        if ((pounds <= maxWeight) && (pounds >= minWeight)) {
+            lcd.setCursor(12, 0);
+            lcd.print("Prev.");
+            lcd.setCursor(12, 2);
+            lcd.print(pounds);
+
+            lcd.setCursor(0, 0);
+            lcd.print(pounds);
+            lcd.print(" ");
+            lcd.setCursor(0, 2);
+            lcd.print("Pounds");
+
+            servo.write(20);
+            delay(700);
+            servo.write(0);
+            delay(1000);
+            return;
+        }
+
+        if (pounds > maxWeight) {
+            lcd.setCursor(12, 0);
+            lcd.print("Prev.");
+            lcd.setCursor(12, 2);
+            lcd.print(pounds);
+
+            lcd.setCursor(0, 0);
+            lcd.print(pounds);
+            lcd.print(" ");
+            lcd.setCursor(0, 2);
+            lcd.print("Pounds");
+
+            servo.write(20);
+            delay(350);
+            servo.write(0);
+            delay(1000);
+            return;
+        }
+    }
+}
